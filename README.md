@@ -1,0 +1,1 @@
+The goal of this draft is to show how pagination is done on message applications. When youre using firebase, it should be a combination on real time listeners to put the real time messages and pagination logic to fetch older messages
