@@ -30,20 +30,37 @@ class _ChatPageState extends State<ChatPage> {
   QueryDocumentSnapshot? _lastDocument;
   final int _messageLimit = 15;
 
+
+  final FocusNode _focusNode = FocusNode();
+
   // Send message
-  void sendMessage() async {
-    if (_messageController.text.isNotEmpty) {
-      await _chatService.sendMessage(widget.receiverUserId, _messageController.text);
-      _messageController.clear();
+void sendMessage() async {
+  if (_messageController.text.isNotEmpty) {
+    final message = _messageController.text; // Store the message text
+    _messageController.clear(); // Clear the input field immediately
+
+    try {
+      await _chatService.sendMessage(widget.receiverUserId, message);
+    } catch (e) {
+      print("Error sending message: $e");
+      // Optional: Show a Snackbar or some UI feedback to inform the user of an error
     }
   }
-
+}
 
     @override
   void initState() {
     super.initState();
     _loadInitialMessages();
      _fetchUsername();
+
+
+       WidgetsBinding.instance.addPostFrameCallback((_) {
+    _focusNode.requestFocus();
+  });
+
+
+  
   }
 
   void _fetchUsername() async {
@@ -51,6 +68,12 @@ class _ChatPageState extends State<ChatPage> {
   setState(() {}); // Trigger a UI rebuild to show the username
 }
 
+
+@override
+void dispose() {
+  _focusNode.dispose(); // Dispose the FocusNode
+  super.dispose();
+}
 
 void _loadInitialMessages() {
   setState(() => _isLoading = true);
@@ -92,14 +115,25 @@ void _loadMoreMessages() async {
   }
 
 
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
+@override
+Widget build(BuildContext context) {
+  return GestureDetector(
+    onTap: () {
+      // Unfocus the keyboard when tapping outside
+      FocusScope.of(context).unfocus();
+    },
+    child: Scaffold(
       appBar: AppBar(
-    title: Text(_username ?? "....."),
+        title: Text(_username ?? "....."),
       ),
       body: Column(
         children: [
+          // A hidden TextField to prewarm the keyboard
+          Offstage(
+            child: TextField(
+              focusNode: FocusNode(), // Unused FocusNode
+            ),
+          ),
           Expanded(
             child: NotificationListener<ScrollNotification>(
               onNotification: (scrollNotification) {
@@ -127,8 +161,10 @@ void _loadMoreMessages() async {
           const SizedBox(height: 30),
         ],
       ),
-    );
-  }
+    ),
+  );
+}
+
 
   // Build message list
   Widget _buildMessageList() {
@@ -209,7 +245,7 @@ void _loadMoreMessages() async {
               builder: (context, value, child) {
                 return value
                     ? Padding(
-                        padding: const EdgeInsets.only(right: 8.0),
+                        padding: const EdgeInsets.only(bottom: 20, right: 20.0),
                         child: Text(
                           formattedTimestamp,
                           style: const TextStyle(fontSize: 12, color: Colors.grey),
@@ -219,7 +255,7 @@ void _loadMoreMessages() async {
               },
             ),
           Container(
-            margin: const EdgeInsets.symmetric(vertical: 5),
+            margin: const EdgeInsets.symmetric(vertical: 5, horizontal: 10),
             padding: const EdgeInsets.all(12),
             constraints: const BoxConstraints(maxWidth: 250),
             decoration: BoxDecoration(
@@ -237,7 +273,7 @@ void _loadMoreMessages() async {
               builder: (context, value, child) {
                 return value
                     ? Padding(
-                        padding: const EdgeInsets.only(left: 8.0),
+                        padding: const EdgeInsets.only(bottom: 20.0, left: 20.0),
                         child: Text(
                           formattedTimestamp,
                           style: const TextStyle(fontSize: 12, color: Colors.grey),
@@ -253,31 +289,51 @@ void _loadMoreMessages() async {
 
   // Build message input
   Widget _buildMessageInput() {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 10),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.end,
-        children: [
-          Expanded(
-            child: TextField(
-              controller: _messageController,
-              maxLines: 8, // Limits to 8 lines
-              minLines: 1, // Minimum height for the input field
-              decoration: InputDecoration(
-                hintText: 'Enter Message..',
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(15),
+  return Padding(
+    padding: const EdgeInsets.symmetric(horizontal: 10),
+    child: Row(
+      crossAxisAlignment: CrossAxisAlignment.end,
+      children: [
+        Expanded(
+          child: TextField(
+            controller: _messageController,
+          
+            maxLines: 8, // Limits to 8 lines
+            minLines: 1, // Minimum height for the input field
+            decoration: InputDecoration(
+              hintText: 'Message..',
+            border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(25),
+                borderSide: BorderSide(color: Colors.grey.shade300), // Default border color
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(25),
+                borderSide: BorderSide(color: Colors.grey.shade300), // Non-focused border color
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(25),
+                borderSide: BorderSide(color: Colors.grey.shade300), // No focus effect
+              ),
+              suffixIcon: GestureDetector(
+                onTap: sendMessage,
+                child: Container(
+                  margin: const EdgeInsets.only(right: 5),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF9B74D7), // Violet background
+                    shape: BoxShape.circle, // Circle shape
+                  ),
+                  child: const Icon(
+                    Icons.arrow_upward, // Arrow-up icon
+                    color: Colors.white, // Icon color
+                  ),
                 ),
               ),
             ),
           ),
-          const SizedBox(width: 10),
-          IconButton(
-            onPressed: sendMessage,
-            icon: const Icon(Icons.send, size: 40),
-          ),
-        ],
-      ),
-    );
-  }
+        ),
+      ],
+    ),
+  );
+}
+
 }
