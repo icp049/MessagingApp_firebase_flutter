@@ -3,6 +3,8 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:notifye/chat/chatpage.dart';
 import 'package:flutter/cupertino.dart';
+import 'chat_service.dart';
+import 'package:intl/intl.dart'; // Add this import for date formatting
 
 class MessagePage extends StatefulWidget {
   const MessagePage({super.key});
@@ -13,7 +15,7 @@ class MessagePage extends StatefulWidget {
 
 class _MessagePageState extends State<MessagePage> {
   final FirebaseAuth _firebaseAuth = FirebaseAuth.instance;
- 
+  final ChatService _chatService = ChatService();
 
   Future<void> _deleteChat(String chatId) async {
     try {
@@ -38,7 +40,8 @@ class _MessagePageState extends State<MessagePage> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Messages'),
+        title: const Text("Messages"),
+        centerTitle: true,
       ),
       body: Column(
         children: [
@@ -53,7 +56,8 @@ class _MessagePageState extends State<MessagePage> {
                   .snapshots(),
               builder: (context, snapshot) {
                 if (snapshot.hasError) {
-                  return const Center(child: Text('Error loading active chats.'));
+                  return const Center(
+                      child: Text('Error loading active chats.'));
                 }
 
                 if (snapshot.connectionState == ConnectionState.waiting) {
@@ -69,8 +73,17 @@ class _MessagePageState extends State<MessagePage> {
 
                   return ListView(
                     children: activeChats.map((doc) {
-                      Map<String, dynamic> chatData = doc.data() as Map<String, dynamic>;
-                      final receiverUsername = chatData['receiver_username'] ?? 'Unknown User';
+                      Map<String, dynamic> chatData =
+                          doc.data() as Map<String, dynamic>;
+                      final isCurrentUser = _firebaseAuth.currentUser!.uid ==
+                          doc.id.split("_")[0];
+                      final isRead = isCurrentUser
+                          ? (chatData['isReadByUser1'] ??
+                              true) // Default to true if null
+                          : (chatData['isReadByUser2'] ??
+                              true); // Default to true if null
+                      final receiverUsername =
+                          chatData['receiver_username'] ?? 'Unknown User';
                       final lastMessage = chatData['last_message'] ?? '';
                       final receiverId = chatData['receiver_id'];
                       final chatId = doc.id;
@@ -79,24 +92,42 @@ class _MessagePageState extends State<MessagePage> {
                         key: Key(chatId),
                         direction: DismissDirection.endToStart,
                         background: Container(
-                          color:const Color(0xFFCC4C4C),
+                          color: const Color(0xFFCC4C4C),
                           alignment: Alignment.centerRight,
                           padding: const EdgeInsets.symmetric(horizontal: 20.0),
-                          child: const Icon(CupertinoIcons.delete, color: Colors.white),
+                          child: const Icon(CupertinoIcons.delete,
+                              color: Colors.white),
                         ),
                         onDismissed: (direction) {
                           _deleteChat(chatId);
                         },
                         child: ListTile(
-                          contentPadding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
-                          leading: CircleAvatar(
-                            radius: 24.0,
-                            backgroundColor: Colors.grey[300],
-                            child: const Icon(
-                              Icons.person,
-                              size: 28.0,
-                              color: Colors.white,
-                            ),
+                          contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 16.0, vertical: 8.0),
+                          leading: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              // Space between avatar and dot
+                              if (!isRead)
+                                Container(
+                                  width: 10.0,
+                                  height: 10.0,
+                                  decoration: BoxDecoration(
+                                    color: Color(0xFF5C3C88),
+                                    shape: BoxShape.circle,
+                                  ),
+                                ),
+                              const SizedBox(width: 10),
+                              CircleAvatar(
+                                radius: 24.0,
+                                backgroundColor: Colors.grey[300],
+                                child: const Icon(
+                                  Icons.person,
+                                  size: 28.0,
+                                  color: Colors.white,
+                                ),
+                              ),
+                            ],
                           ),
                           title: Text(
                             receiverUsername,
@@ -119,11 +150,31 @@ class _MessagePageState extends State<MessagePage> {
                               );
                             } else {
                               ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(content: Text('Invalid user ID')),
+                                const SnackBar(
+                                    content: Text('Invalid user ID')),
                               );
                             }
                           },
-                          trailing: Icon(Icons.chevron_right, color: Colors.grey[600]),
+                          trailing: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              if (chatData.containsKey('last_message_time'))
+                                Text(
+                                  formatTimestamp(
+                                      chatData['last_message_time']),
+                                  style: const TextStyle(
+                                      color: Colors.grey, fontSize: 12.0),
+                                ),
+                              const SizedBox(width: 8),
+                              const Icon(
+                                Icons.chevron_right,
+                                color: Colors.grey,
+                              ),
+                            ],
+                          ),
+                          tileColor: isRead
+                              ? null
+                              : Colors.grey[200], // Highlight unread chats
                         ),
                       );
                     }).toList(),
@@ -137,5 +188,20 @@ class _MessagePageState extends State<MessagePage> {
         ],
       ),
     );
+  }
+}
+
+String formatTimestamp(Timestamp? timestamp) {
+  if (timestamp == null) return '';
+  final DateTime dateTime = timestamp.toDate();
+  final now = DateTime.now();
+  final difference = now.difference(dateTime);
+
+  if (difference.inDays > 1) {
+    return DateFormat('MMM dd').format(dateTime); // e.g., Jan 01
+  } else if (difference.inDays == 1) {
+    return 'Yesterday';
+  } else {
+    return DateFormat('hh:mm a').format(dateTime); // e.g., 10:30 AM
   }
 }
